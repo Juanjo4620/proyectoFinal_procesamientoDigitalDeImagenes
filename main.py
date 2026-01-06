@@ -72,53 +72,42 @@ def area_triangulo(a, b, c):
 
 # 5. NUCLEO DEL PANDEO
 def aplicar_warping_triangular(img_src, tri_src, tri_dst, metodo_interp):
-    """Deforma un triángulo usando Transformación Afín (warpAffine) y máscara."""
-    # 0) Seguridad: descartar triángulos degenerados (evita artefactos fuertes)
-    # Ajusta el umbral si lo deseas; 1 o 2 suele ser suficiente en píxeles.
     if abs(area_triangulo(tri_dst[0], tri_dst[1], tri_dst[2])) < 1:
         return None, None, None
 
-    # 1) Bounding rect
     r_src = cv2.boundingRect(np.float32([tri_src]))
     r_dst = cv2.boundingRect(np.float32([tri_dst]))
 
     x_src, y_src, w_src, h_src = r_src
     x_dst, y_dst, w_dst, h_dst = r_dst
 
-    # Si el bounding box destino no tiene área, salir
     if w_dst <= 0 or h_dst <= 0:
         return None, None, None
 
-    # 2) ROI src
     crop_src = img_src[y_src:y_src + h_src, x_src:x_src + w_src]
     if crop_src.size == 0:
         return None, None, None
 
-    # 3) Puntos relativos al ROI
     pts_src_rel = []
     pts_dst_rel = []
     for i in range(3):
         pts_src_rel.append((tri_src[i][0] - x_src, tri_src[i][1] - y_src))
         pts_dst_rel.append((tri_dst[i][0] - x_dst, tri_dst[i][1] - y_dst))
 
-    # 4) Matriz afín
     matriz = cv2.getAffineTransform(np.float32(pts_src_rel), np.float32(pts_dst_rel))
 
-    # 5) Warping
     warp_dst = cv2.warpAffine(
         crop_src, matriz, (w_dst, h_dst),
         flags=metodo_interp,
         borderMode=cv2.BORDER_REFLECT_101
     )
 
-    # 6) Máscara (3 canales para operar directo con RGB/BGR)
     mascara = np.zeros((h_dst, w_dst, 3), dtype=np.uint8)
     cv2.fillConvexPoly(mascara, np.int32(pts_dst_rel), (1, 1, 1), 16, 0)
 
     return warp_dst * mascara, mascara, r_dst
 
 def renderizar_imagen_completa(img_original, triangulos, interpolacion):
-    """Render completo triángulo por triángulo con pegado seguro."""
     canvas = np.zeros_like(img_original)
     h_canvas, w_canvas = canvas.shape[:2]
 
@@ -134,7 +123,6 @@ def renderizar_imagen_completa(img_original, triangulos, interpolacion):
 
         x, y, w, h = rect_dst
 
-        # Intersección con el canvas (clamp)
         y1, y2 = y, y + h
         x1, x2 = x, x + w
 
@@ -146,7 +134,6 @@ def renderizar_imagen_completa(img_original, triangulos, interpolacion):
         if cy1 >= cy2 or cx1 >= cx2:
             continue
 
-        # offsets para recortar el trozo y máscara
         oy1 = cy1 - y1
         oy2 = h - (y2 - cy2)
         ox1 = cx1 - x1
